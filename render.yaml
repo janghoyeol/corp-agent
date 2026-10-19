@@ -2,6 +2,7 @@ services:
   - type: web
     name: corp-agent
     runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /
     envVars:
