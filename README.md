@@ -9,6 +9,8 @@
 "카카오 최근 3년 매출 추이 보여줘"
 ```
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/janghoyeol/corp-agent)
+
 ## 왜 만들었나
 
 공공데이터 + Claude tool-use 에이전트로 만들었던 기존 프로젝트들(KOSIS 통계 질의,
@@ -119,6 +121,9 @@ uvicorn corp_agent.api:app --reload --port 8000
 내놓을 일이 없다.
 
 ## 배포 (Render)
+
+위의 **Deploy to Render** 버튼을 누르면 아래 과정이 대부분 자동으로 진행된다
+(레포의 `render.yaml`을 Render가 그대로 읽는다). 수동으로 하고 싶다면:
 
 ```
 corp-agent/
