@@ -13,10 +13,13 @@ import os
 import sys
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 try:
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # 실행 위치(cwd)와 상관없이 항상 레포 루트의 .env를 읽는다.
+    load_dotenv(_REPO_ROOT / ".env")
 except ImportError:
     pass
 
@@ -24,7 +27,7 @@ from .agent import CorpAgent
 from .corp_codes import load_tsv
 from .dart_client import DartClient
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "corp_codes.tsv"
+DATA_PATH = _REPO_ROOT / "data" / "corp_codes.tsv"
 
 
 def main() -> None:

@@ -19,7 +19,17 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+try:
+    from dotenv import load_dotenv
+
+    # 실행 위치(cwd)와 상관없이 항상 레포 루트의 .env를 읽는다.
+    load_dotenv(_REPO_ROOT / ".env")
+except ImportError:
+    pass
+
+sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from corp_agent import tools as corp_tools  # noqa: E402
 from corp_agent.corp_codes import load_tsv  # noqa: E402
