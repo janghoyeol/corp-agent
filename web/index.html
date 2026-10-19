@@ -8,7 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"
+  onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';document.head.appendChild(s);"></script>
 <style>
   :root {
     --bg: #f6f7fb;
@@ -450,7 +451,13 @@ function render(data) {
     sourceLineEl.style.display = "none";
   }
 
-  renderChart(data.chart);
+  // 차트 렌더링이 실패해도(예: CDN 로드 지연) 답변·출처·호출 로그는 항상 보여준다.
+  try {
+    renderChart(data.chart);
+  } catch (err) {
+    console.error("차트 렌더링 실패:", err);
+    chartBlockEl.classList.remove("show");
+  }
   renderTrace(data.tool_calls);
   panelEl.classList.add("show");
 }
@@ -459,6 +466,12 @@ function renderChart(points) {
   if (!points || points.length < 2) {
     chartBlockEl.classList.remove("show");
     if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+  if (typeof Chart === "undefined") {
+    // Chart.js CDN 로드 실패(네트워크 지연/차단). 차트만 건너뛰고 나머지는 정상 표시.
+    console.warn("Chart.js가 로드되지 않아 차트를 건너뜁니다.");
+    chartBlockEl.classList.remove("show");
     return;
   }
   chartBlockEl.classList.add("show");
