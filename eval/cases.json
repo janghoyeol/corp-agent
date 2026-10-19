@@ -1,0 +1,32 @@
+{
+  "_comment": "TODO: 각 case의 expected_amount를 opendart.fss.or.kr에서 실제 공시 숫자로 직접 확인한 뒤 채워 넣으세요. 숫자를 추측해서 넣지 마세요 — 이 eval의 목적 자체가 '지어내지 않기'를 검증하는 것입니다. 단위는 원(DART 원자료 그대로).",
+  "cases": [
+    {
+      "id": "samsung-2023-revenue",
+      "corp_name": "삼성전자",
+      "bsns_year": "2023",
+      "reprt_code": "11011",
+      "account": "매출액",
+      "expected_amount": null,
+      "source_hint": "2023 사업보고서 (2024년 3월경 공시) — DART에서 직접 확인"
+    },
+    {
+      "id": "kakao-2023-operating-profit",
+      "corp_name": "카카오",
+      "bsns_year": "2023",
+      "reprt_code": "11011",
+      "account": "영업이익",
+      "expected_amount": null,
+      "source_hint": "2023 사업보고서 — DART에서 직접 확인"
+    },
+    {
+      "id": "naver-2023-net-income",
+      "corp_name": "NAVER",
+      "bsns_year": "2023",
+      "reprt_code": "11011",
+      "account": "당기순이익",
+      "expected_amount": null,
+      "source_hint": "2023 사업보고서 — DART에서 직접 확인"
+    }
+  ]
+}
