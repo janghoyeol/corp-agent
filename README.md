@@ -68,7 +68,9 @@ corp-agent/
 │   ├── corp_codes.py    # 고유번호 캐싱/파싱, 회사명 → corp_code 변환
 │   ├── tools.py          # 3개 tool의 실제 로직 (계정과목 매칭, 증감률 계산)
 │   ├── agent.py          # Claude tool-use 루프, 시스템 프롬프트
-│   └── cli.py             # CLI 엔트리포인트
+│   ├── cli.py             # CLI 엔트리포인트
+│   └── api.py             # FastAPI 웹 API (CLI와 같은 CorpAgent 재사용)
+├── web/index.html          # 정적 프런트엔드 (빌드 불필요, api.py가 서빙)
 ├── scripts/download_corpcodes.py  # 고유번호 전체자료 → data/corp_codes.tsv 캐싱
 ├── eval/
 │   ├── cases.json         # 고정 정답셋 (expected_amount는 실 공시로 직접 검증 필요)
@@ -92,9 +94,29 @@ cp .env.example .env
 # 3. 고유번호 전체자료 캐싱 (최초 1회, 이후 거의 재다운로드 불필요)
 python scripts/download_corpcodes.py
 
-# 4. 질의
+# 4. 질의 (CLI)
 python -m corp_agent "삼성전자 2023년 영업이익 알려줘" --show-calls
+
+# 5. 또는 웹 UI로 실행
+uvicorn corp_agent.api:app --reload --port 8000
+# 브라우저에서 http://localhost:8000 접속
 ```
+
+## 웹 UI
+
+```
+┌───────────────────────────────┐
+│  FastAPI (api.py)              │
+│   POST /api/ask → CorpAgent    │  ← CLI와 동일한 에이전트/도구 로직 재사용
+│   GET  /        → web/index.html (정적 1-파일 프런트엔드, 빌드 불필요)
+└───────────────────────────────┘
+```
+
+질문을 입력하면 답변·출처와 함께, `compute_growth`가 호출된 경우(여러 연도
+추이를 물었을 때) 금액·증감률 차트를, 어떤 도구를 어떤 순서로 호출했는지
+보여주는 호출 로그를 함께 렌더링한다. 백엔드 로직은 CLI(`cli.py`)와 완전히
+같은 `CorpAgent`를 그대로 재사용하므로, 두 인터페이스가 서로 다른 답을
+내놓을 일이 없다.
 
 ## 테스트
 

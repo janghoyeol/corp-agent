@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>corp-agent — 기업 재무 질의 에이전트</title>
+<meta name="description" content="회사명을 입력하면 DART 공시 데이터를 조회해 출처와 함께 재무 추이를 보여주는 Claude 에이전트" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --surface-alt: #f0f2f8;
+    --border: #e3e6ef;
+    --text: #15182b;
+    --text-dim: #5b6072;
+    --text-faint: #9297a8;
+    --accent: #0f6e5e;
+    --accent-strong: #0a5447;
+    --accent-soft: #e4f5f0;
+    --gold: #b8860b;
+    --danger: #c0392b;
+    --danger-soft: #fdeceb;
+    --shadow: 0 1px 2px rgba(20, 24, 50, 0.04), 0 8px 24px rgba(20, 24, 50, 0.06);
+    --radius: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0f1a;
+      --surface: #121829;
+      --surface-alt: #182036;
+      --border: #232c45;
+      --text: #eef0f8;
+      --text-dim: #a7acc2;
+      --text-faint: #6b7189;
+      --accent: #35d6ab;
+      --accent-strong: #2bb894;
+      --accent-soft: #10332b;
+      --gold: #e3b341;
+      --danger: #ff6b6b;
+      --danger-soft: #3a1a1a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 28px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 20px 80px;
+  }
+
+  header { text-align: center; margin-bottom: 36px; }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 16px;
+  }
+  .badge::before { content: "●"; font-size: 8px; color: var(--accent); }
+
+  h1 {
+    font-size: 34px;
+    font-weight: 800;
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+  }
+  h1 span { color: var(--accent-strong); }
+
+  header p {
+    color: var(--text-dim);
+    font-size: 15px;
+    line-height: 1.6;
+    max-width: 560px;
+    margin: 0 auto;
+  }
+
+  form {
+    display: flex;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px;
+    box-shadow: var(--shadow);
+  }
+
+  input[type="text"] {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 15px;
+    padding: 12px 14px;
+    outline: none;
+  }
+  input[type="text"]::placeholder { color: var(--text-faint); }
+
+  button.ask {
+    border: none;
+    background: var(--accent);
+    color: #04231c;
+    font-weight: 700;
+    font-size: 14px;
+    padding: 0 22px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+  }
+  button.ask:hover { opacity: 0.92; }
+  button.ask:active { transform: scale(0.97); }
+  button.ask:disabled { opacity: 0.5; cursor: progress; }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+    justify-content: center;
+  }
+  .chip {
+    font-size: 13px;
+    color: var(--text-dim);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent-strong); }
+
+  .panel {
+    display: none;
+    margin-top: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .panel.show { display: block; }
+
+  .answer-block {
+    padding: 28px 26px 22px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .answer-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .answer-text {
+    font-size: 17px;
+    line-height: 1.75;
+    white-space: pre-wrap;
+  }
+  .answer-text strong { color: var(--gold); font-weight: 700; }
+
+  .source-line {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-dim);
+    font-family: "JetBrains Mono", monospace;
+    background: var(--surface-alt);
+    border-radius: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent);
+  }
+
+  .chart-block {
+    display: none;
+    padding: 24px 26px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chart-block.show { display: block; }
+  .chart-block canvas { max-height: 280px; }
+
+  details.trace {
+    padding: 4px 26px 20px;
+  }
+  details.trace summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    padding: 14px 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  details.trace summary::-webkit-details-marker { display: none; }
+  details.trace summary::before { content: "▸"; transition: transform 0.15s; }
+  details.trace[open] summary::before { transform: rotate(90deg); }
+
+  .trace-step {
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+  .trace-step:first-of-type { border-top: none; }
+  .trace-dot {
+    flex-shrink: 0;
+    width: 24px; height: 24px;
+    border-radius: 7px;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    margin-top: 1px;
+  }
+  .trace-name {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .trace-desc { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+  .trace-io {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin-top: 6px;
+    background: var(--surface-alt);
+    border-radius: 6px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+
+  .status {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-top: 24px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .status.show { display: flex; }
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-panel {
+    display: none;
+    margin-top: 24px;
+    background: var(--danger-soft);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    font-size: 14px;
+  }
+  .error-panel.show { display: block; }
+
+  .principles {
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+  }
+  .principle {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 16px;
+  }
+  .principle .icon { font-size: 18px; margin-bottom: 8px; }
+  .principle h3 { font-size: 13.5px; margin: 0 0 4px; }
+  .principle p { font-size: 12.5px; color: var(--text-dim); margin: 0; line-height: 1.5; }
+
+  footer {
+    margin-top: 48px;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-faint);
+  }
+  footer a { color: var(--accent-strong); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">DART 공식 공시 기반</div>
+    <h1><span>corp-agent</span> — 기업 재무 질의 에이전트</h1>
+    <p>회사명을 물어보면 DART 전자공시 데이터를 조회해 매출·영업이익·순이익 추이를 분석합니다.
+    모든 숫자에는 공시 접수번호가 출처로 붙고, 증감률은 모델이 암산하지 않고 코드로 계산합니다.</p>
+  </header>
+
+  <form id="ask-form">
+    <input id="question" type="text" placeholder="예: 삼성전자 작년 영업이익 알려줘" autocomplete="off" />
+    <button class="ask" type="submit">질문하기</button>
+  </form>
+
+  <div class="chips" id="chips">
+    <div class="chip" data-q="삼성전자 작년 영업이익 알려줘">삼성전자 작년 영업이익</div>
+    <div class="chip" data-q="카카오 최근 3년 매출 추이 보여줘">카카오 최근 3년 매출 추이</div>
+    <div class="chip" data-q="NAVER 작년 당기순이익 알려줘">NAVER 작년 당기순이익</div>
+  </div>
+
+  <div class="status" id="status"><div class="spinner"></div><span>DART 공시 조회 중...</span></div>
+  <div class="error-panel" id="error"></div>
+
+  <div class="panel" id="panel">
+    <div class="answer-block">
+      <div class="answer-label" id="company-label">답변</div>
+      <div class="answer-text" id="answer-text"></div>
+      <div class="source-line" id="source-line" style="display:none;"></div>
+    </div>
+    <div class="chart-block" id="chart-block">
+      <canvas id="chart"></canvas>
+    </div>
+    <details class="trace">
+      <summary>에이전트 도구 호출 로그 보기</summary>
+      <div id="trace-list"></div>
+    </details>
+  </div>
+
+  <div class="principles">
+    <div class="principle">
+      <div class="icon">📎</div>
+      <h3>출처 없는 숫자는 없음</h3>
+      <p>모든 금액에 공시 접수번호·사업연도·연결/개별 여부를 함께 표기</p>
+    </div>
+    <div class="principle">
+      <div class="icon">🧮</div>
+      <h3>계산은 코드로</h3>
+      <p>증감률은 compute_growth 도구로만 계산, 모델 암산 금지</p>
+    </div>
+    <div class="principle">
+      <div class="icon">🚫</div>
+      <h3>모르면 모른다고</h3>
+      <p>계정을 못 찾으면 추측하지 않고 명시적으로 실패 처리</p>
+    </div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/janghoyeol/corp-agent" target="_blank" rel="noopener">GitHub 레포</a> ·
+    stat-agent / realty-agent / air-agent와 동일한 설계 원칙을 재사용했습니다.
+  </footer>
+</div>
+
+<script>
+const form = document.getElementById("ask-form");
+const questionInput = document.getElementById("question");
+const statusEl = document.getElementById("status");
+const errorEl = document.getElementById("error");
+const panelEl = document.getElementById("panel");
+const answerTextEl = document.getElementById("answer-text");
+const companyLabelEl = document.getElementById("company-label");
+const sourceLineEl = document.getElementById("source-line");
+const chartBlockEl = document.getElementById("chart-block");
+const traceListEl = document.getElementById("trace-list");
+const askButton = form.querySelector("button.ask");
+
+let chartInstance = null;
+
+const TOOL_LABELS = {
+  resolve_company: { icon: "🔎", desc: "회사명으로 DART 고유번호 후보 탐색" },
+  get_financials: { icon: "📄", desc: "DART 재무제표 원자료 조회 (CFS→OFS 폴백 포함)" },
+  compute_growth: { icon: "📈", desc: "연도별 증감률 코드 계산" },
+};
+
+document.getElementById("chips").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  questionInput.value = chip.dataset.q;
+  form.requestSubmit();
+});
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const question = questionInput.value.trim();
+  if (!question) return;
+
+  askButton.disabled = true;
+  statusEl.classList.add("show");
+  errorEl.classList.remove("show");
+  panelEl.classList.remove("show");
+
+  try {
+    const resp = await fetch("/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data.detail || "요청 처리 중 오류가 발생했습니다.");
+    }
+    render(data);
+  } catch (err) {
+    errorEl.textContent = "⚠ " + err.message;
+    errorEl.classList.add("show");
+  } finally {
+    askButton.disabled = false;
+    statusEl.classList.remove("show");
+  }
+});
+
+function render(data) {
+  companyLabelEl.textContent = data.company_name ? `답변 · ${data.company_name}` : "답변";
+
+  // "출처: ..." 줄을 본문에서 분리해 따로 보여준다.
+  const lines = data.answer.split("\n").filter((l) => l.trim().length > 0);
+  const sourceIdx = lines.findIndex((l) => l.trim().startsWith("출처"));
+  const bodyLines = sourceIdx >= 0 ? lines.slice(0, sourceIdx) : lines;
+  const sourceLine = sourceIdx >= 0 ? lines[sourceIdx] : null;
+
+  answerTextEl.innerHTML = bodyLines.join("\n").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  if (sourceLine) {
+    sourceLineEl.textContent = sourceLine;
+    sourceLineEl.style.display = "block";
+  } else {
+    sourceLineEl.style.display = "none";
+  }
+
+  renderChart(data.chart);
+  renderTrace(data.tool_calls);
+  panelEl.classList.add("show");
+}
+
+function renderChart(points) {
+  if (!points || points.length < 2) {
+    chartBlockEl.classList.remove("show");
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    return;
+  }
+  chartBlockEl.classList.add("show");
+  const ctx = document.getElementById("chart").getContext("2d");
+  if (chartInstance) chartInstance.destroy();
+
+  const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const gridColor = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)";
+  const textColor = isDark ? "#a7acc2" : "#5b6072";
+
+  chartInstance = new Chart(ctx, {
+    data: {
+      labels: points.map((p) => p.year),
+      datasets: [
+        {
+          type: "bar",
+          label: "금액",
+          data: points.map((p) => p.amount),
+          backgroundColor: isDark ? "rgba(53, 214, 171, 0.55)" : "rgba(15, 110, 94, 0.65)",
+          borderRadius: 6,
+          yAxisID: "y",
+        },
+        {
+          type: "line",
+          label: "전년 대비 증감률(%)",
+          data: points.map((p) => p.yoy_growth_pct),
+          borderColor: "#e3b341",
+          backgroundColor: "#e3b341",
+          tension: 0.3,
+          yAxisID: "y1",
+          spanGaps: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { labels: { color: textColor, font: { family: "Noto Sans KR" } } },
+      },
+      scales: {
+        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+        y: {
+          position: "left",
+          ticks: { color: textColor },
+          grid: { color: gridColor },
+          title: { display: true, text: "금액 (원)", color: textColor },
+        },
+        y1: {
+          position: "right",
+          ticks: { color: textColor },
+          grid: { display: false },
+          title: { display: true, text: "증감률 (%)", color: textColor },
+        },
+      },
+    },
+  });
+}
+
+function renderTrace(calls) {
+  traceListEl.innerHTML = "";
+  (calls || []).forEach((call, i) => {
+    const meta = TOOL_LABELS[call.name] || { icon: "⚙", desc: "" };
+    const step = document.createElement("div");
+    step.className = "trace-step";
+    step.innerHTML = `
+      <div class="trace-dot">${meta.icon}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="trace-name">${i + 1}. ${call.name}</div>
+        <div class="trace-desc">${meta.desc}</div>
+        <div class="trace-io">input: ${JSON.stringify(call.input)}</div>
+      </div>
+    `;
+    traceListEl.appendChild(step);
+  });
+}
+</script>
+</body>
+</html>
