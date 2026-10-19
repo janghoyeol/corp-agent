@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: corp-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: OPENDART_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CORP_AGENT_MODEL
+        value: claude-sonnet-4-5
+      - key: CORP_AGENT_RATE_LIMIT_PER_10MIN
+        value: "20"

@@ -9,10 +9,12 @@ CLI(cli.py)와 같은 CorpAgent를 그대로 재사용한다 — 로직은 한 �
 from __future__ import annotations
 
 import os
+import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -77,11 +79,37 @@ def _extract_company_name(result: AgentResult) -> Optional[str]:
     return None
 
 
+_RATE_LIMIT_WINDOW_SECONDS = 600  # 10분 슬라이딩 윈도우
+
+
+def _client_ip(request: Request) -> str:
+    # Render 등 PaaS는 프록시 뒤에 있어 X-Forwarded-For의 첫 값이 실제 클라이언트 IP.
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 def create_app(agent: Optional[CorpAgent] = None) -> FastAPI:
     """agent를 주입할 수 있게 해서, 테스트에서 실제 API 키 없이 더미
     에이전트로 라우팅/직렬화 로직만 검증할 수 있게 한다."""
     app = FastAPI(title="corp-agent")
     state: dict[str, Any] = {"agent": agent}
+    rate_limit_hits: dict[str, list[float]] = defaultdict(list)
+    rate_limit_max = int(os.environ.get("CORP_AGENT_RATE_LIMIT_PER_10MIN", "20"))
+
+    def check_rate_limit(request: Request) -> None:
+        """공개 배포 시 익명 사용자가 Anthropic API 비용을 무제한으로 쓰지
+        못하도록 하는 최소한의 안전장치. 인스턴스 1개 기준 in-memory 제한이라
+        여러 인스턴스로 스케일하면 사용자별 합산은 느슨해지지만, 데모/포트폴리오
+        규모에서는 충분하다."""
+        ip = _client_ip(request)
+        now = time.monotonic()
+        hits = rate_limit_hits[ip]
+        hits[:] = [t for t in hits if now - t < _RATE_LIMIT_WINDOW_SECONDS]
+        if len(hits) >= rate_limit_max:
+            raise HTTPException(429, "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.")
+        hits.append(now)
 
     def get_agent() -> CorpAgent:
         if state["agent"] is None:
@@ -99,10 +127,13 @@ def create_app(agent: Optional[CorpAgent] = None) -> FastAPI:
         return state["agent"]
 
     @app.post("/api/ask", response_model=AskResponse)
-    def ask(req: AskRequest) -> AskResponse:
+    def ask(req: AskRequest, request: Request) -> AskResponse:
+        check_rate_limit(request)
         question = req.question.strip()
         if not question:
             raise HTTPException(400, "질문을 입력해주세요.")
+        if len(question) > 200:
+            raise HTTPException(400, "질문이 너무 깁니다 (200자 이내로 입력해주세요).")
         result = get_agent().ask(question)
         return AskResponse(
             answer=result.answer,

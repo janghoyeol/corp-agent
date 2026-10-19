@@ -87,6 +87,28 @@ def test_ask_rejects_empty_question():
     assert resp.status_code == 400
 
 
+def test_ask_rejects_overly_long_question():
+    app = create_app(agent=DummyAgent(AgentResult(answer="", tool_calls=[])))
+    client = TestClient(app)
+
+    resp = client.post("/api/ask", json={"question": "가" * 201})
+
+    assert resp.status_code == 400
+
+
+def test_rate_limit_blocks_after_threshold(monkeypatch):
+    monkeypatch.setenv("CORP_AGENT_RATE_LIMIT_PER_10MIN", "3")
+    app = create_app(agent=DummyAgent(_result_with_chart()))
+    client = TestClient(app)
+
+    for _ in range(3):
+        resp = client.post("/api/ask", json={"question": "삼성전자"})
+        assert resp.status_code == 200
+
+    blocked = client.post("/api/ask", json={"question": "삼성전자"})
+    assert blocked.status_code == 429
+
+
 def test_ask_without_agent_or_env_key_returns_500():
     import os
 

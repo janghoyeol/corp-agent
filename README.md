@@ -118,6 +118,43 @@ uvicorn corp_agent.api:app --reload --port 8000
 같은 `CorpAgent`를 그대로 재사용하므로, 두 인터페이스가 서로 다른 답을
 내놓을 일이 없다.
 
+## 배포 (Render)
+
+```
+corp-agent/
+├── Dockerfile              # python:3.11-slim, pip install -e ., entrypoint 실행
+├── docker/entrypoint.sh    # 고유번호 캐시 없으면 다운로드 → uvicorn 기동
+└── render.yaml             # Render Blueprint (서비스 1개, Docker 런타임)
+```
+
+1. [render.com](https://render.com) 가입 (GitHub 계정으로 로그인 가능)
+2. **New** → **Blueprint** → 이 GitHub 레포(`janghoyeol/corp-agent`) 선택 →
+   `render.yaml`을 자동 인식
+3. 배포 과정에서 비어있는 환경변수 2개를 입력하라고 물어봄:
+   - `OPENDART_API_KEY`
+   - `ANTHROPIC_API_KEY`
+4. **Apply** → 빌드 시작 (Docker 이미지 빌드 + 최초 기동 시 고유번호 캐시 다운로드)
+5. 끝나면 `https://corp-agent-xxxx.onrender.com` 같은 URL이 발급됨
+
+**알아둘 점**
+
+- 무료 플랜은 15분 동안 요청이 없으면 슬립 상태로 들어가고, 다음 요청에서
+  깨어나는 데 30~60초가 걸린다. 면접 데모 직전에 한 번 미리 방문해서
+  깨워두는 걸 권장한다. (상시 깨어있어야 하면 유료 플랜으로 전환)
+- **공개 웹사이트가 되면 누구나 `/api/ask`를 호출해 Anthropic API 비용을
+  소모할 수 있다.** 최소한의 방어로 IP당 10분에 `CORP_AGENT_RATE_LIMIT_PER_10MIN`
+  (기본 20회) 요청 제한을 걸어뒀지만, 이것만으로 충분하지 않다면
+  [console.anthropic.com](https://console.anthropic.com)에서 월 지출 한도를
+  반드시 설정해두는 걸 권장한다.
+- OpenDART도 일일 호출 한도가 있다 — 트래픽이 몰리면 `020`(한도 초과) 에러로
+  답변이 실패할 수 있다.
+
+로컬에서 배포 이미지를 미리 확인하려면:
+```bash
+docker build -t corp-agent .
+docker run --rm -p 8000:8000 --env-file .env corp-agent
+```
+
 ## 테스트
 
 ```bash
